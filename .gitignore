@@ -1,0 +1,31 @@
+# ---- 构建产物 ----
+*.exe
+*.dll
+*.pdb
+bin/
+obj/
+dist/
+!dist/.gitkeep
+
+# ---- 备份 / 旧版 ----
+*.bak
+*.bak_*
+old_c.js
+old_c1.js
+
+# ---- 运行时日志与本地配置 ----
+run.log
+*.ini
+!win.ini.example
+win.ini
+
+# ---- Python 探针缓存 ----
+__pycache__/
+*.py[cod]
+
+# ---- 编辑器 / 系统 ----
+.vscode/
+.idea/
+Thumbs.db
+.DS_Store
+nul

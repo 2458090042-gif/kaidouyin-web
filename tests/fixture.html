@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>fixture</title>
+<style>
+  body { margin:0; background:#000; color:#fff; font-family:sans-serif; overflow:hidden; }
+  .xgplayer { position:fixed; inset:0; }
+  video { width:100%; height:100%; background:#000; }
+  .controls { position:absolute; left:0; right:0; bottom:12px; height:40px;
+             display:flex; align-items:center; gap:10px; padding:0 14px; }
+  .gear { width:40px; height:32px; line-height:32px; text-align:center;
+          background:#333; border-radius:4px; cursor:pointer; font-size:12px; }
+  .gear.hover { background:#444; }
+  /* 面板独立于 .gear，就像真实站点 */
+  .xgplayer-playclarity-setting { width:100px; background:rgba(28,28,30,.96);
+          border-radius:8px; display:none; padding:6px 0; position:absolute;
+          right:60px; bottom:56px; z-index:10; }
+  .xgplayer-playclarity-setting.open { display:block; }
+  /* 未展开时 item 塌成 0x0（复现真实站点） */
+  .xgplayer-playclarity-setting .item { width:0; height:0; overflow:hidden; padding:0; }
+  .xgplayer-playclarity-setting.show .item { width:87px; height:28px; padding:0 14px; }
+  .item { padding:0 14px; font-size:13px; cursor:pointer; width:87px; height:28px;
+          line-height:28px; box-sizing:border-box; }
+  .item:hover { background:#3a3a3c; }
+  .item.selected { color:#4aa8ff; }
+  .xgplayer-playratio-item { width:0; height:0; overflow:hidden; }
+  .xgplayer-playback-setting { width:0; height:0; overflow:hidden; }
+</style>
+</head>
+<body>
+<div class="xgplayer" id="player">
+  <video id="v" autoplay muted playsinline></video>
+  <div class="controls" id="ctl">
+    <!-- 真实站点同时存在两个 .gear：展开时那个 innerText 会被菜单文字污染 -->
+    <div class="gear hover" id="gearHover" style="display:none"></div>
+    <div class="gear" id="gear">智能</div>
+    <div class="xgplayer-playback-setting"></div>
+    <div class="xgplayer-playratio-item">1.0x</div>
+    <div class="xgplayer-playratio-item">1.5x</div>
+  </div>
+  <div class="xgplayer-playclarity-setting" id="panel"></div>
+</div>
+<script>
+/* 结构与真实抖音播放器一致：
+   档位 = class="item"，文字 "高清 1080P"/"高清 720P"/"标清 540P"/"智能"；
+   "智能" 项始终带 .selected；展开时另有一个 .gear 被塞满菜单文字。 */
+var QUAL = [
+  { t: '高清 1080P', s: 60 },
+  { t: '高清 720P',  s: 50 },
+  { t: '标清 540P',  s: 40 },
+  { t: '智能',       s: 0 }
+];
+var cur = '智能';
+var video = document.getElementById('v');
+var panel = document.getElementById('panel');
+var gear  = document.getElementById('gear');
+var gearHover = document.getElementById('gearHover');
+
+var F = window.__fixture = {
+  clicks: 0, gearClicks: 0, opens: 0, switches: 0, fsReqs: 0,
+  panelOpenMs: 0, videoIndex: 0, actual: '540P'
+};
+
+/* 真实站点：指针停在齿轮上时档位才展开（item 才有 87x28 尺寸），
+   移开就塌成 0x0。这里同样用 hover 驱动，才能验证脚本的 hover 策略。 */
+function renderPanel() {
+  panel.innerHTML = '';
+  QUAL.forEach(function (q) {
+    var d = document.createElement('div');
+    d.className = 'item' + (q.t === cur ? ' selected' : '');
+    d.textContent = q.t;
+    d.onclick = function (e) {
+      e.stopPropagation();
+      if (q.t === cur) return;
+      cur = q.t;
+      F.actual = q.s >= 60 ? '1080P' : (q.s >= 50 ? '720P' : '540P');
+      F.switches++;
+    };
+    panel.appendChild(d);
+  });
+}
+function openPanel() {
+  if (panel.classList.contains('open')) return;
+  panel.classList.add('open');
+  panel.classList.add('show');      // 展开：item 有真实尺寸
+  F.opens++;
+  renderPanel();
+  // 真实站点：另一个 .gear 的 innerText 变成整段菜单（脚本必须绕开它）
+  gearHover.style.display = 'block';
+  gearHover.textContent = '高清 1080P 高清 720P 标清 540P 智能 智能';
+}
+function closePanel() {
+  panel.classList.remove('open');
+  panel.classList.remove('show');
+  gearHover.style.display = 'none';
+  gearHover.textContent = '';
+}
+/* hover 即展开（真实站点行为） */
+gear.addEventListener('mouseenter', openPanel);
+gear.addEventListener('mouseover', openPanel);
+gear.addEventListener('mousemove', openPanel);
+/* 真实站点点击齿轮是切换显隐 */
+gear.addEventListener('click', function () {
+  F.clicks++; F.gearClicks++;
+  if (panel.classList.contains('open')) closePanel(); else openPanel();
+});
+
+var BLOB = 'blob:https://www.douyin.com/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee';
+Object.defineProperty(video, 'currentSrc', { get: function () { return BLOB; } });
+Object.defineProperty(video, 'src', { get: function () { return BLOB; } });
+
+var clock = 0;
+var LIVE = new URLSearchParams(location.search).get('live') === '1';
+Object.defineProperty(video, 'currentTime', {
+  get: function () { return clock; }, set: function (v) { clock = v; } });
+Object.defineProperty(video, 'duration', { get: function () { return LIVE ? Infinity : 42; } });
+Object.defineProperty(video, 'readyState', { get: function () { return 4; } });
+Object.defineProperty(video, 'paused', { get: function () { return false; } });
+Object.defineProperty(video, 'seeking', { get: function () { return false; } });
+Object.defineProperty(video, 'videoWidth', { get: function () { return 1280; } });
+setInterval(function () { clock += 0.25; }, 250);
+
+var c = document.createElement('canvas'); c.width = 320; c.height = 180;
+var ctx = c.getContext('2d'); var frame = 0;
+setInterval(function () {
+  frame++;
+  ctx.fillStyle = 'hsl(' + (frame % 360) + ',60%,30%)';
+  ctx.fillRect(0, 0, 320, 180);
+  ctx.fillStyle = '#fff'; ctx.font = '18px sans-serif';
+  ctx.fillText(F.actual + ' #' + F.videoIndex, 12, 100);
+}, 120);
+try { video.srcObject = c.captureStream(12); video.play().catch(function () { }); } catch (e) { }
+
+if (LIVE) { gear.style.display = 'none'; }
+
+var n = parseInt(new URLSearchParams(location.search).get('videos') || '0', 10);
+if (n > 0) {
+  var i = 0;
+  var timer = setInterval(function () {
+    i++;
+    if (i > n) { clearInterval(timer); return; }
+    F.videoIndex = i;
+    cur = '智能'; F.actual = '540P';
+    clock = 0;
+    closePanel();
+    video.dispatchEvent(new Event('loadedmetadata'));
+  }, 4000);
+}
+
+Element.prototype.requestFullscreen = function () { F.fsReqs++; return Promise.resolve(); };
+
+F.state = function () {
+  return {
+    cur: F.actual, preset: cur, opens: F.opens, gearClicks: F.gearClicks,
+    clicks: F.clicks, switches: F.switches,
+    panelOpen: panel.classList.contains('open'),
+    fsReqs: F.fsReqs, videoIndex: F.videoIndex,
+    panelOpenMs: Math.round(F.panelOpenMs)
+  };
+};
+</script>
+</body>
+</html>

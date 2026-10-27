@@ -1,0 +1,7 @@
+# KaiDouyin 窗口配置示例，复制为 win.ini 后按需修改
+[win]
+x=0
+y=0
+w=1280
+h=800
+maximized=1
